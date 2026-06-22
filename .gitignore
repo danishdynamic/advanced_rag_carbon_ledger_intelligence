@@ -1,0 +1,18 @@
+# === Backend / Python Secrets & Environment ===
+backend/.env
+backend/.venv/
+backend/__pycache__/
+backend/*.pyc
+backend/.pytest_cache/
+
+# === Frontend / Node Secrets & Dependencies ===
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+frontend/.json
+
+# === OS & IDE Specifics ===
+.DS_Store
+.vscode/
+.idea/

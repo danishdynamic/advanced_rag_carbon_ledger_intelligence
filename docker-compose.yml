@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  carbon_primary:
+    image: pgvector/pgvector:pg17
+    container_name: carbon_ledger_primary
+    environment:
+      POSTGRES_USER: carbon_admin
+      POSTGRES_PASSWORD: ledger_secure_password
+      POSTGRES_DB: carbon_intelligence
+    ports:
+      - "5433:5432"
+    volumes:
+      - primary_postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  carbon_replica:
+    image: pgvector/pgvector:pg17
+    container_name: carbon_ledger_replica
+    environment:
+      POSTGRES_USER: carbon_reader
+      POSTGRES_PASSWORD: ledger_read_password
+      POSTGRES_DB: carbon_intelligence_replica
+    ports:
+      - "5434:5432"
+    volumes:
+      - replica_postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  primary_postgres_data:
+  replica_postgres_data:
