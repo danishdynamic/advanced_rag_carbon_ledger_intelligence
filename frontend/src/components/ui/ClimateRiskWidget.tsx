@@ -17,7 +17,7 @@ export function ClimateRiskWidget() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('http://localhost:8000/api/system/analytics/climate-risk')
+    fetch('http://localhost:8000/api/analytics/climate-risk')
       .then((res) => {
         if (!res.ok) throw new Error('Failed to fetch climate risk analytics');
         return res.json();

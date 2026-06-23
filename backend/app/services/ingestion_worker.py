@@ -1,13 +1,21 @@
 import logging
 import uuid
 import io
+import json
 import asyncpg
+from pydantic import BaseModel, Field
 from google import genai
 from google.genai import types
 from app.config import settings
 from app.services.search import compliance_search
 
 logger = logging.getLogger("carbon_ledger.ingestion_worker")
+
+# 📊 1. Define the exact shape of data we want Gemini to extract
+class CorporateClimateMetrics(BaseModel):
+    facility_name: str = Field(description="The primary corporate entity or specific facility/plant name discussed in the document.")
+    annual_co2_emissions_tons: float = Field(description="The numeric annual carbon or CO2 emissions in metric tons. Default to 0.0 if not found.")
+    regulatory_framework: str = Field(description="The governing framework mentioned (e.g., EU-ETS, CCA, local compliance). Default to 'Baseline'.")
 
 def chunk_text(text: str, chunk_size: int = 800, overlap: int = 150) -> list[str]:
     """Splits plain text into sliding window semantic fragments."""
@@ -25,11 +33,10 @@ def chunk_text(text: str, chunk_size: int = 800, overlap: int = 150) -> list[str
 async def process_document_task(task_id: uuid.UUID, file_name: str, file_bytes: bytes):
     """
     Polymorphic async worker thread.
-    Uses local decoding for text, and Gemini Multimodal Vision for PDFs 
-    to extract text, transcribe tables, and interpret visual charts/graphs.
+    Extracts unstructured data via Gemini Vision, compiles structured financial risk 
+    indicators, and populates the vector-search indices concurrently.
     """
     conn = await asyncpg.connect(settings.PRIMARY_DB_URL)
-    # Instantiate a standalone GenAI client for the background worker lifecycle
     ai_client = genai.Client()
     
     try:
@@ -41,16 +48,15 @@ async def process_document_task(task_id: uuid.UUID, file_name: str, file_bytes: 
         full_extracted_text = ""
         lower_name = file_name.lower()
 
-        # 1. Plain Text Routing
+        # --- PHASE 1: PLAIN TEXT INGESTION ---
         if lower_name.endswith('.txt'):
             logger.info(f"Routing task {task_id} to Plain Text Decoder...")
             full_extracted_text = file_bytes.decode("utf-8", errors="ignore")
 
-        # 2. Multimodal PDF Vision Routing (Handles Text, Scan OCR, and Charts)
+        # --- PHASE 2: MULTIMODAL PDF PARSING (GEMINI VISION) ---
         elif lower_name.endswith('.pdf'):
             logger.info(f"Routing task {task_id} to Gemini Multimodal Vision Engine...")
             
-            # Upload the raw binary stream securely to the temporary Gemini Files API storage
             pdf_buffer = io.BytesIO(file_bytes)
             uploaded_file = ai_client.files.upload(
                 file=pdf_buffer,
@@ -59,7 +65,6 @@ async def process_document_task(task_id: uuid.UUID, file_name: str, file_bytes: 
             
             logger.info(f"PDF successfully staged in Gemini File API. Name: {uploaded_file.name}")
 
-            # Instruct the vision model to extract layout context along with deep chart analysis
             parsing_prompt = """
             You are an advanced document parsing engine. Extract all content from this compliance document with perfect structural fidelity.
             
@@ -71,7 +76,6 @@ async def process_document_task(task_id: uuid.UUID, file_name: str, file_bytes: 
             Output the raw extracted text and visual summaries directly without introducing meta-commentary.
             """
 
-            # Run the visual parsing pass
             response = ai_client.models.generate_content(
                 model="gemini-2.5-flash",
                 contents=[uploaded_file, parsing_prompt]
@@ -79,21 +83,69 @@ async def process_document_task(task_id: uuid.UUID, file_name: str, file_bytes: 
             
             full_extracted_text = response.text if response.text else ""
             
-            # Clean up the file from Gemini cloud storage immediately after processing
+            # Asynchronous Clean up
             try:
-                if uploaded_file.name:  # ◄— Type guard guarantees 'str' type to Pylance
+                if uploaded_file.name:
                     ai_client.files.delete(name=uploaded_file.name)
                     logger.info(f"Cleaned up remote staging file: {uploaded_file.name}")
-                else:
-                    logger.warning("Staged file identifier missing; skipping remote cleanup payload.")
             except Exception as clean_err:
                 logger.warning(f"Non-blocking failure cleaning up staged Gemini file: {str(clean_err)}")
 
-        # 3. Safety Check
+        # --- PHASE 3: SAFETY GUARD & ANALYTICS CALCULATION ---
         if not full_extracted_text.strip():
             raise ValueError("Vision extraction pass returned an unparsable or completely empty text payload.")
 
-        # 4. Process chunks and save to vector database
+        # 🎯 NEW: If it's a PDF compliance report, extract structured indicators for the Green Finance engine
+        if lower_name.endswith('.pdf'):
+            logger.info(f"Executing structured data extraction pass for task {task_id}...")
+            
+            analysis_prompt = f"""
+            Analyze the following extracted document text and extract the specific environmental parameters requested in the output schema.
+            
+            Document Text:
+            {full_extracted_text}
+            """
+            
+            # Force Gemini to return an exact JSON structure matching our Pydantic schema
+            structured_response = ai_client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=analysis_prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=CorporateClimateMetrics,
+                ),
+            )
+
+            # 🛡️ 1. Extract to a variable and check for None/empty string
+            raw_json = structured_response.text
+            if not raw_json:
+                raise ValueError("Gemini structured extraction returned an empty or missing text payload.")
+            
+            # 🎯 2. Pylance now knows for a fact that raw_json is strictly a 'str'
+            metrics = json.loads(raw_json)
+            
+            
+            facility = metrics.get("facility_name", f"Unknown Facility ({file_name})")
+            emissions = float(metrics.get("annual_co2_emissions_tons", 0.0))
+            framework = metrics.get("regulatory_framework", "Baseline")
+            
+            # 🧮 Compute our deterministic business metrics (e.g., carbon pricing baseline at $90/ton)
+            carbon_price_baseline = 90.00
+            projected_liability = emissions * carbon_price_baseline
+            risk_level = "high" if projected_liability > 50000.0 else "low"
+            scenario_meta = f"Gemini Parsing Pass - Framework: {framework}"
+            
+            # Save the analytical result directly to the write database cluster
+            logger.info(f"Writing calculated risk variables to climate_risk_assessments for facility: {facility}")
+            await conn.execute(
+                """
+                INSERT INTO climate_risk_assessments (assessment_id, facility_name, projected_tax_liability, risk_level, scenario_type)
+                VALUES (gen_random_uuid(), $1, $2, $3, $4);
+                """,
+                facility, projected_liability, risk_level, scenario_meta
+            )
+
+        # --- PHASE 4: VECTOR EMBEDDING GENERATION ---
         chunks = chunk_text(full_extracted_text)
         
         await conn.execute(
