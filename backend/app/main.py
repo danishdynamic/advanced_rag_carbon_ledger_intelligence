@@ -4,6 +4,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import db_manager
 from app.routers import compliance
+from app.routers import ledger
+from app.routers import documents
+from app.api import endpoints
 
 # Configure logging baseline
 logging.basicConfig(level=logging.INFO)
@@ -37,6 +40,12 @@ app.add_middleware(
 )
 
 app.include_router(compliance.router)
+
+app.include_router(ledger.router)
+
+app.include_router(documents.router)
+
+app.include_router(endpoints.router)
 
 
 @app.get("/health")

@@ -1,5 +1,7 @@
 import logging
+import asyncio
 import asyncpg
+from fastapi import HTTPException
 from app.config import settings
 
 logger = logging.getLogger("carbon_ledger.database")
@@ -13,9 +15,6 @@ class SplitDatabaseManager:
         """Initializes primary and replica connection pools concurrently."""
         try:
             logger.info("Initializing dual-pool database cluster connections...")
-            
-            # Open pools concurrently using asyncio.gather
-            import asyncio
             self.write_pool, self.read_pool = await asyncio.gather(
                 asyncpg.create_pool(
                     settings.PRIMARY_DB_URL,
@@ -26,7 +25,7 @@ class SplitDatabaseManager:
                 asyncpg.create_pool(
                     settings.REPLICA_DB_URL,
                     min_size=5,
-                    max_size=25,  # Replica gets a larger pool to support heavy concurrent RAG lookups
+                    max_size=25,
                     command_timeout=60.0,
                 )
             )
@@ -44,16 +43,12 @@ class SplitDatabaseManager:
             await self.read_pool.close()
         logger.info("Database pools safely terminated.")
 
-# Instantiate a single global manager to be referenced across the application lifecycle
 db_manager = SplitDatabaseManager()
 
 # --- FastAPI Dependency Injectors ---
 
 async def get_write_db():
-    """
-    Dependency provider for transactional endpoints (Ledger entries, audits).
-    Leases an isolated connection from the Primary pool.
-    """
+    """Leases an isolated connection from the Primary pool for transactional queries."""
     if not db_manager.write_pool:
         raise RuntimeError("Database write pool is not initialized.")
     
@@ -62,11 +57,34 @@ async def get_write_db():
 
 async def get_read_db():
     """
-    Dependency provider for heavy analytical/retrieval endpoints (RAG searches).
-    Leases an isolated connection from the Read Replica pool.
+    Leases a connection from the Read Replica pool.
+    Safely falls back to the Primary pool if the replica connection fails to lease.
     """
-    if not db_manager.read_pool:
-        raise RuntimeError("Database read pool is not initialized.")
-    
-    async with db_manager.read_pool.acquire() as connection:
-        yield connection
+    connection = None
+    fallback_needed = False
+
+    # 1. Attempt to safely lease a connection from the read pool
+    if db_manager.read_pool:
+        try:
+            connection = await db_manager.read_pool.acquire()
+        except (asyncpg.InterfaceError, asyncpg.CannotConnectNowError, ConnectionRefusedError, OSError) as e:
+            logger.critical(f"Read Replica lease failed. Activating fallback path. Error: {str(e)}")
+            fallback_needed = True
+    else:
+        fallback_needed = True
+
+    # 2. Execute connection lifecycles outside of the acquisition try-block
+    if fallback_needed or connection is None:
+        if not db_manager.write_pool:
+            raise HTTPException(status_code=500, detail="Entire database cluster pool is completely offline.")
+        
+        logger.info("Routing read request to Primary write pool via fallback connection.")
+        async with db_manager.write_pool.acquire() as fallback_conn:
+            yield fallback_conn
+    else:
+        # Connection was successfully obtained from the replica pool
+        try:
+            yield connection
+        finally:
+            # Explicitly return connection to the replica pool when the request ends
+            await db_manager.read_pool.release(connection)
