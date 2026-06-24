@@ -29,7 +29,7 @@ class DecomposedQueryPlan(BaseModel):
 class CognitiveQueryProcessor:
     def __init__(self):
         self.client = genai.Client()
-        self.model_name = "gemini-2.5-flash"
+        self.model_name = "gemini-3.1-flash-lite"
 
     async def process_query(self, user_query: str, history_context: str = "") -> DecomposedQueryPlan:
         """

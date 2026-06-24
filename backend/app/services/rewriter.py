@@ -1,17 +1,19 @@
 import logging
+import asyncpg
 from google import genai
 from google.genai import types
 from app.config import settings
+from .quota_manager import check_and_increment_quota  
 
 logger = logging.getLogger("carbon_ledger.rewriter")
 
 class QueryRewriter:
     def __init__(self):
-        # Initialize the official Google GenAI Client
         self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
-        self.model_name = "gemini-2.5-flash"
+        # ⚡ Updated to the Lite tier model
+        self.model_name = "gemini-3.1-flash-lite"
 
-    async def rewrite_query(self, current_query: str, chat_history: list[dict]) -> str:
+    async def rewrite_query(self, current_query: str, chat_history: list[dict], db_conn: asyncpg.Connection) -> str:
         """
         Analyzes conversation logs and transforms shorthand follow-ups 
         into a fully articulated compliance search query.
@@ -19,7 +21,6 @@ class QueryRewriter:
         if not chat_history:
             return current_query
 
-        # Format historical records for the prompt context
         history_context = ""
         for turn in chat_history:
             role = "User" if turn.get("role") == "user" else "Assistant"
@@ -41,12 +42,15 @@ class QueryRewriter:
         """
 
         try:
-            # Execute standard content generation
-            response = self.client.models.generate_content(
+            # 🛡️ Quota Check: Executed right before calling the model
+            await check_and_increment_quota(db_conn)
+            
+            # ⚡ Optimized: Switched from sync .generate_content to non-blocking async (.aio)
+            response = await self.client.aio.models.generate_content(
                 model=self.model_name,
                 contents=prompt,
                 config=types.GenerateContentConfig(
-                    temperature=0.0, # Complete deterministic precision for structural search queries
+                    temperature=0.0,  # Complete deterministic precision for structural search queries
                 )
             )
             
@@ -56,7 +60,6 @@ class QueryRewriter:
 
         except Exception as e:
             logger.error(f"Failed to reformulate query context: {str(e)}")
-            # Fall back to the user's raw query to keep the system operational if API drops out
             return current_query
 
 # Singleton instance

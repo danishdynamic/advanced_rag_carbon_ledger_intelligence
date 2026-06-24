@@ -1,6 +1,5 @@
-version: '3.8'
-
 services:
+  # 🌍 The Primary Write Node
   carbon_primary:
     image: pgvector/pgvector:pg17
     container_name: carbon_ledger_primary
@@ -8,24 +7,78 @@ services:
       POSTGRES_USER: carbon_admin
       POSTGRES_PASSWORD: ledger_secure_password
       POSTGRES_DB: carbon_intelligence
+      POSTGRES_HOST_AUTH_METHOD: trust
     ports:
       - "5433:5432"
     volumes:
       - primary_postgres_data:/var/lib/postgresql/data
+      - ./backend/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U carbon_admin -d carbon_intelligence"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+    command: ["postgres", "-c", "wal_level=replica", "-c", "max_wal_senders=10", "-c", "max_replication_slots=10", "-c", "listen_addresses=*"]
     restart: unless-stopped
 
+  # 🔄 The Automated Read Replica Shadow Node
   carbon_replica:
     image: pgvector/pgvector:pg17
     container_name: carbon_ledger_replica
+    depends_on:
+      carbon_primary:
+        condition: service_healthy
     environment:
-      POSTGRES_USER: carbon_reader
-      POSTGRES_PASSWORD: ledger_read_password
-      POSTGRES_DB: carbon_intelligence_replica
+      PGUSER: carbon_admin
+      PGPASSWORD: ledger_secure_password
+      PGDATABASE: carbon_intelligence
+      POSTGRES_HOST_AUTH_METHOD: trust
     ports:
       - "5434:5432"
     volumes:
       - replica_postgres_data:/var/lib/postgresql/data
+    entrypoint: |
+      bash -c '
+      set -e
+      if [ -z "$(ls -A /var/lib/postgresql/data)" ]; then
+        echo "Starting clean basebackup clone..."
+        pg_basebackup -h carbon_primary -D /var/lib/postgresql/data -U carbon_admin -Fp -Xs -P -R
+      fi
+      exec docker-entrypoint.sh postgres
+      '
     restart: unless-stopped
+
+  # 🚀 FastAPI Backend Application
+  backend:
+    build: ./backend
+    container_name: carbon_ledger_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    environment:
+      - PRIMARY_DB_URL=postgres://carbon_admin:ledger_secure_password@carbon_primary:5432/carbon_intelligence
+      - REPLICA_DB_URL=postgres://carbon_admin:ledger_secure_password@carbon_replica:5432/carbon_intelligence
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    depends_on:
+      carbon_primary:
+        condition: service_healthy
+
+  # 💻 Frontend Interface
+  frontend:
+    build: ./frontend
+    container_name: carbon_ledger_frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      - backend
 
 volumes:
   primary_postgres_data:

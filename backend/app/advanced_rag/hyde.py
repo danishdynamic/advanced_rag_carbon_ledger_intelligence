@@ -13,7 +13,7 @@ class HyDEGenerator:
     def __init__(self):
         # Initializes using GEMINI_API_KEY from environment variables automatically
         self.client = genai.Client()
-        self.model_name = "gemini-2.5-flash"
+        self.model_name = "gemini-3.1-flash-lite"
 
     async def generate_hypothetical_doc(self, query: str) -> str:
         """
