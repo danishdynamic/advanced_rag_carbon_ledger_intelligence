@@ -7,10 +7,13 @@ from google import genai
 from google.genai import types
 from app.config import settings
 
+# 🎯 Active Imports
+from ..advanced_rag.query_processor import query_processor
+from ..advanced_rag.hyde import HyDEGenerator
+
 logger = logging.getLogger("carbon_ledger.search")
 
 # --- Pydantic Blueprints for CRAG & Decomposition ---
-
 class EvaluationSchema(BaseModel):
     is_relevant: bool = Field(description="True if the retrieved text context chunks contain useful data to answer the main query. False otherwise.")
     confidence_score: float = Field(description="Confidence rating between 0.0 and 1.0.")
@@ -27,9 +30,11 @@ class AdvancedComplianceSearch:
     def __init__(self):
         self.client = genai.Client()
         self.embedding_model = "gemini-embedding-001"
+        # 🎯 Initialize the HyDE engine within the constructor
+        self.hyde_engine = HyDEGenerator()
 
     async def _generate_embedding(self, text: str) -> list[float]:
-        """Generates a standard 3072-dimension vector via Gemini API (gemini-embedding-001 default)."""
+        """Generates a standard 3072-dimension vector via Gemini API."""
         try:
             response = await self.client.aio.models.embed_content(
                 model=self.embedding_model,
@@ -97,12 +102,17 @@ class AdvancedComplianceSearch:
         return final_docs
 
     async def hybrid_decomposed_search(self, execution_steps: list, pool: asyncpg.Pool, limit_per_worker: int = 15) -> list[dict]:
-        """Orchestrates parallel multi-query execution threads concurrently over connection."""
+        """Orchestrates parallel multi-query execution threads concurrently over connections."""
         vector_tasks = []
         keyword_tasks = []
 
         for step in execution_steps:
-            vector_tasks.append(self._vector_search_worker(step.sub_query, step.framework_filter, pool, limit_per_worker))
+            # 🎯 1. Generate a hypothetical technical paragraph for Vector Search
+            logger.info(f"Synthesizing HyDE vector anchor for target: '{step.sub_query}'")
+            hypothetical_paragraph = await self.hyde_engine.generate_hypothetical_doc(step.sub_query)
+            
+            # 🎯 2. Execute vector match using HyDE text, but keep original keywords for standard full-text matching
+            vector_tasks.append(self._vector_search_worker(hypothetical_paragraph, step.framework_filter, pool, limit_per_worker))
             keyword_tasks.append(self._keyword_search_worker(step.sub_query, step.framework_filter, pool, limit_per_worker))
 
         vector_results_groups = await asyncio.gather(*vector_tasks)
@@ -110,35 +120,27 @@ class AdvancedComplianceSearch:
 
         return self.compute_rrf(vector_results_groups, keyword_results_groups)
 
-    # 🚀 NEW: Deep Cognitive Trace Entrypoint for the Chat Interface
+    # 🚀 Deep Cognitive Trace Entrypoint for the Chat Interface
     async def retrieve_cognitive_trace(self, query: str, pool: asyncpg.Pool) -> dict:
-        logger.info(f"Decomposing core user prompt into sub-queries: '{query}'")
+        logger.info(f"Processing cognitive trace allocation via query_processor: '{query}'")
         
-        # 1. Dynamically split query using Structured Outputs
-        decomp_prompt = f"Analyze this user question and break it into structural sub-queries for parallel database indexing lookup: {query}"
-        
+        # 🎯 3. Use your dedicated standalone query_processor service instead of duplicate inline code
         try:
-            decomp_response = await self.client.aio.models.generate_content(
-                model="gemini-3.1-flash-lite",
-                contents=decomp_prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=QueryDecompositionSchema
-                )
-            )
+            decomposed_plan = await query_processor.process_query(user_query=query, history_context="")
             
-            raw_decomp_text = decomp_response.text or "{}"
-            decomp_data = json.loads(raw_decomp_text)
-            # Reconstruct into blueprint objects for compatibility
-            execution_steps = [SubQueryBlueprint(**step) for step in decomp_data.get("sub_queries", [])]
+            # Map the advanced_rag schemas cleanly into local blueprint instances
+            execution_steps = [
+                SubQueryBlueprint(sub_query=step.sub_query, framework_filter=step.framework_filter) 
+                for step in decomposed_plan.execution_steps
+            ]
         except Exception as e:
-            logger.warning(f"Query decomposition failed, falling back to raw query syntax: {str(e)}")
+            logger.warning(f"Dedicated query decomposition failed, falling back to raw syntax: {str(e)}")
             execution_steps = [SubQueryBlueprint(sub_query=query, framework_filter=None)]
 
         # Extract literal string lists for the tracing panel display
         trace_sub_queries = [step.sub_query for step in execution_steps]
 
-        # 2. Run your existing heavy hybrid RRF engine
+        # 4. Run your upgraded heavy hybrid RRF engine (now backed by HyDE!)
         fused_results = await self.hybrid_decomposed_search(execution_steps, pool, limit_per_worker=5)
         top_slices = fused_results[:3] # Target top 3 unified contexts
 
@@ -150,7 +152,7 @@ class AdvancedComplianceSearch:
                 "file_name": r["framework_name"],
                 "section": r["section_identifier"],
                 "text_snippet": r["raw_text_chunk"],
-                "similarity": round(r.get("rrf_score", 0.0) * 100, 1) # Display RRF metric as visibility percentage
+                "similarity": round(r.get("rrf_score", 0.0) * 100, 1)
             }
             source_references.append(ref)
             retrieved_texts.append(r["raw_text_chunk"])
@@ -166,7 +168,7 @@ class AdvancedComplianceSearch:
                 "confidence_score": 0.0
             }
 
-        # 3. Corrective RAG Evaluation
+        # 5. Corrective RAG Evaluation
         eval_prompt = f"Evaluate whether this context contains hard objective metrics to answer the user query.\nQuery: {query}\nContext: {combined_context}"
         try:
             eval_response = await self.client.aio.models.generate_content(

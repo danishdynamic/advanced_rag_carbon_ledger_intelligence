@@ -8,9 +8,11 @@ from app.database import get_read_db
 from app.advanced_rag.query_processor import query_processor
 from app.services.search import compliance_search
 from app.services.reranker import document_reranker
-from app.services.evaluator import RagasEvaluationService, RagasScores  # 🎯 New Import
+from app.services.evaluator import RagasEvaluationService, RagasScores  
+from app.advanced_rag.hyde import HyDEGenerator
 from google import genai
 
+hyde_engine = HyDEGenerator()
 logger = logging.getLogger("carbon_ledger.routers.compliance")
 router = APIRouter(prefix="/api/compliance", tags=["Compliance Intelligence"])
 genai_client = genai.Client()
@@ -44,8 +46,20 @@ async def execute_compliance_rag(
         )
         query_plan = await query_processor.process_query(payload.query, history_str)
 
+        # 🎯 THE UPGRADE: For each sub-query, synthesize a hypothetical compliance paragraph
+        hyde_execution_steps = []
+        for step in query_plan.execution_steps:
+            logger.info(f"Running HyDE expansion for sub-query: {step.sub_query}")
+            
+            # Transform the question into a fake technical answer segment
+            synthetic_paragraph = await hyde_engine.generate_hypothetical_doc(step.sub_query)
+            
+            # Swap the raw question out for the dense technical paragraph!
+            step.sub_query = synthetic_paragraph
+            hyde_execution_steps.append(step)
+
         fused_candidates = await compliance_search.hybrid_decomposed_search(
-            execution_steps=query_plan.execution_steps, pool=db_pool
+            execution_steps=hyde_execution_steps, pool=db_pool
         )
 
         if not fused_candidates:

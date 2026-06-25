@@ -41,7 +41,9 @@ class HyDEGenerator:
                 contents=prompt
             )
             
-            hypothetical_doc = response.text.strip()
+            raw_text = response.text if response.text else ""
+            hypothetical_doc = raw_text.strip()
+            
             logger.info("Successfully synthesized HyDE document vector anchor.")
             return hypothetical_doc
             
