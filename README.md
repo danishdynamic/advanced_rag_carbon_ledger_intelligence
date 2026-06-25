@@ -2,7 +2,8 @@
 
 A high-performance, event-driven compliance intelligence platform designed to ingest regulatory documents, ESG disclosures, climate reports, and operational filings using Gemini Multimodal Vision, transform them into structured knowledge assets, and provide enterprise-grade Retrieval-Augmented Generation (RAG) capabilities for compliance auditing and regulatory intelligence.
 
- ![Screenshot](frontend/public/ScreenshotRag.png)
+<img width="946" height="470" alt="Screenshot 2026-06-25 173938" src="https://github.com/user-attachments/assets/3f6d5708-0547-418f-8769-20292405be0f" />
+
 
 ---
 
