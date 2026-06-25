@@ -7,7 +7,6 @@ from app.routers import compliance
 from app.routers import ledger
 from app.routers import documents
 from app.api import endpoints
-from app.routers.analytics import router as analytics_router
 from app.routers import chat
 
 # Configure logging baseline
@@ -69,7 +68,6 @@ app.include_router(documents.router)
 
 app.include_router(endpoints.router)
 
-app.include_router(analytics_router)
 
 app.include_router(chat.router)
 

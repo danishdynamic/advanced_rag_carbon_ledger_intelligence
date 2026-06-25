@@ -4,9 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Backgro
 from pydantic import BaseModel, Field
 import asyncpg
 from datetime import datetime
-from app.services.risk_engine import ClimateRiskService
 
-# 🔄 Fixed & Unified Imports from app.database
+
 from app.database import get_write_db, get_read_db, register_user_write
 from app.services.ingestion_worker import process_document_task
 
@@ -36,7 +35,7 @@ async def upload_compliance_document(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     db_conn: asyncpg.Connection = Depends(get_write_db),
-    x_user_id: str = Header(default="anonymous_client")  # 👈 Captures user identity for RYOW
+    x_user_id: str = Header(default="anonymous_client")
 ):
     """
     Accepts both plain text (.txt) and binary PDF (.pdf) documents,
@@ -50,12 +49,10 @@ async def upload_compliance_document(
 
     try:
         file_bytes = await file.read()
-        task_id = uuid.uuid4() # Native UUID stays pristine for background processing
-        
-        # 🎯 Trick the type-checker but pass the literal string string '30ad36a0...' to asyncpg
+        task_id = uuid.uuid4()
         task_id_str: uuid.UUID = str(task_id)  # type: ignore[assignment]
         
-        # Write to primary cluster
+        # Write initial task entry to primary cluster
         await db_conn.execute(
             """
             INSERT INTO ingestion_tasks (task_id, file_name, status)
@@ -64,35 +61,27 @@ async def upload_compliance_document(
             task_id_str, file.filename
         )
 
-        # 🛡️ Track this write sequence to protect the user from replication lag
+        # Track write sequence to protect against replication lag
         register_user_write(x_user_id)
 
-        # 🚀 Pure native UUID object gets dispatched to the worker cleanly!
+        # Dispatch background worker task for pure pgvector RAG processing
         background_tasks.add_task(
             process_document_task, 
             task_id, 
             file.filename, 
             file_bytes
         )
-        
-        try:
-            # 🎯 Fixed: Variable named correctly and invoked with 'await'
-            await ClimateRiskService.run_dynamic_extraction(db_conn)
-            logger.info("Risk assessment metrics successfully aggregated!")
-        except Exception as calc_err:
-            logger.error(f"Ingestion succeeded but metric processing failed: {str(calc_err)}")
 
         return IngestionReceipt(
             task_id=task_id,
             file_name=file.filename,
             status="pending",
-            message="Document successfully queued for background parsing and extraction."
+            message="Document successfully queued for background parsing and vectorization."
         )
 
     except Exception as e:
         logger.error(f"Failed to initialize file upload pipeline: {str(e)}")
         raise HTTPException(status_code=500, detail="Document ingestion scheduling initialization failed.")
-    
 
 
 @router.get("/tasks/{task_id}", response_model=TaskStatusResponse)

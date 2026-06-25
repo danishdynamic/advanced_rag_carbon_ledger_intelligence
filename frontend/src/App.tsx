@@ -7,7 +7,6 @@ import { motion, AnimatePresence } from 'framer-motion'
 // Component Imports
 import { DashboardStats } from '@/components/ui/DashboardStats'
 import { DocumentManager } from '@/components/ui/DocumentManager'
-import { ClimateRiskWidget } from '@/components/ui/ClimateRiskWidget'
 import ComplianceChat from '@/components/ui/ComplianceChat'
 
 export default function App() {
@@ -151,17 +150,6 @@ export default function App() {
             </AnimatePresence>
           </div>
         </Tabs>
-
-        {/* Global Widgets Section */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.4 }}
-          className="bg-white rounded-2xl border border-zinc-200 shadow-sm p-4"
-        >
-          <ClimateRiskWidget />
-        </motion.div>
         
       </motion.main>
     </div>

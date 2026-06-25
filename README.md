@@ -1,401 +1,479 @@
-# Carbon Ledger Analytics & Ingestion Platform
+# Carbon Ledger Analytics & Compliance Intelligence Platform
 
-A high-performance, event-driven, decoupled platform architected to parse unstructured corporate climate compliance documents, extract environmental telemetries using Multimodal Vision AI, and execute deterministic financial risk models.
+A high-performance, event-driven compliance intelligence platform designed to ingest regulatory documents, ESG disclosures, climate reports, and operational filings using Gemini Multimodal Vision, transform them into structured knowledge assets, and provide enterprise-grade Retrieval-Augmented Generation (RAG) capabilities for compliance auditing and regulatory intelligence.
 
-![Project Screenshot 1](frontend/public/Screenshot1.png)
+![Screenshot](frontend/public/ScreenshotRag.png)
 
-![Project Screenshot 2](frontend/public/Screenshotrag.png)
 ---
 
-## 🏗️ Architectural Overview
+# 🏗️ Architecture Overview
 
-The platform enforces strict separation of concerns by decoupling heavy document-ingestion workloads from latency-sensitive analytical APIs. It uses a split-pool PostgreSQL topology to support asymmetric read/write traffic patterns commonly found in regulatory compliance systems.
+The platform is built around a decoupled architecture that separates ingestion, retrieval, generation, and evaluation workflows into independent services.
 
 ```text
-[ React / Vite Frontend Dashboard ]
-                    │
-          HTTP / Web API Layer
-                    │
-      ┌─────────────┴─────────────┐
-      ▼                           ▼
-[ Primary Cluster: 5433 ]   [ Read Replica: 5434 ]
-   (Write Workloads)         (Analytics Queries)
-      │                           ▲
- Async Task Worker                │
- (Gemini Pipeline) ───────────────┘
+┌─────────────────────────────────────────────┐
+│            React Frontend Dashboard         │
+└─────────────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────┐
+│              FastAPI API Layer              │
+└─────────────────────────────────────────────┘
+                      │
+      ┌───────────────┼────────────────┐
+      ▼               ▼                ▼
+  Document       Compliance        Chat Engine
+  Services         APIs             APIs
+      │
+      ▼
+┌─────────────────────────────────────────────┐
+│         Advanced RAG Intelligence Layer     │
+└─────────────────────────────────────────────┘
+      │
+      ▼
+┌─────────────────────────────────────────────┐
+│      PostgreSQL + pgvector + Graph Data     │
+└─────────────────────────────────────────────┘
 ```
 
-### Frontend Dashboard
+---
 
-A React + TypeScript application featuring:
+# 🚀 Core Features
 
-* Real-time ingestion monitoring
-* Progress tracking
-* Reactive analytics dashboards
-* Accessibility-compliant UI controls
+### Multimodal Document Intelligence
 
-### API Gateway (FastAPI)
+* PDF ingestion
+* ESG report parsing
+* Compliance document analysis
+* Table extraction
+* Chart interpretation
+* Layout-aware text extraction
 
-Provides asynchronous routing for:
+### Enterprise Retrieval-Augmented Generation
 
-* Document ingestion
-* Analytics retrieval
-* Operational diagnostics
-* Platform telemetry
+* Parent-child chunking
+* Graph-RAG
+* HYDE retrieval
+* Query decomposition
+* Reciprocal Rank Fusion
+* Cross-encoder reranking
+* Corrective RAG validation
+* RAGAS quality scoring
 
-### Analytical Services
+### Compliance Intelligence
 
-Dedicated computation engines responsible for:
-
-* Regulatory exposure calculations
-* Deterministic financial risk modeling
-* Verification workflows that reduce AI hallucinations
-
-### Ingestion Pipeline
-
-Background task workers powered by:
-
-* `google-genai`
-* `asyncpg`
-* Gemini Vision Models
-
-Responsible for:
-
-* Document parsing
-* Structural extraction
-* Markdown generation
-* Telemetry generation
-
-### Storage Topology
-
-A split-pool PostgreSQL architecture:
-
-| Component        | Port | Responsibility                    |
-| ---------------- | ---- | --------------------------------- |
-| Primary Database | 5433 | Writes & Transactional Operations |
-| Read Replica     | 5434 | Analytics & Read Queries          |
+* Regulatory document analysis
+* Climate disclosure auditing
+* ESG metric extraction
+* Entity relationship mapping
+* Audit trail generation
 
 ---
 
 # 📂 Project Structure
 
 ```text
-backend/app/
-├── api/
-│   ├── endpoints.py
-│   └── routers/
-│       ├── analytics.py
-│       └── documents.py
+backend/
 │
-├── services/
-│   └── risk_engine.py
+├── app/
+│   │
+│   ├── advanced_rag/
+│   │   ├── hyde.py
+│   │   └── query_processor.py
+│   │
+│   ├── api/
+│   │   ├── endpoints.py
+│   │   │
+│   │   └── routers/
+│   │       ├── chat.py
+│   │       ├── compliance.py
+│   │       ├── documents.py
+│   │       └── ledger.py
+│   │
+│   └── services/
+│       ├── evaluator.py
+│       ├── ingestion_worker.py
+│       ├── quota_manager.py
+│       ├── reranker.py
+│       ├── rewriter.py
+│       └── search.py
 │
-├── workers/
-│   └── ingestion_worker.py
+├── config/
 │
-└── db/
-    └── session.py
+├── database/
+│
+├── migrations/
+│   ├── 001_create_ingestion.sql
+│   ├── 002_gemini_daily_quota.sql
+│   └── 003_gemini_rag_base.sql
+│
+├── main.py
+│
+└── Dockerfile
+
+
+frontend/
+│
+├── components/
+│
+├── ui/
+│   ├── Button.tsx
+│   ├── Card.tsx
+│   ├── DashboardStats.tsx
+│   ├── ComplianceChat.tsx
+│   └── Sonner.tsx
+│
+├── lib/
+│   └── api.ts
+│
+└── App.tsx
 ```
-
-### Component Responsibilities
-
-| File                | Description                              |
-| ------------------- | ---------------------------------------- |
-| endpoints.py        | Operational diagnostics & telemetry      |
-| analytics.py        | Green finance analytics APIs             |
-| documents.py        | Document ingestion APIs                  |
-| risk_engine.py      | Exposure calculations & extraction logic |
-| ingestion_worker.py | Gemini Vision ingestion pipeline         |
-| session.py          | Primary/Replica routing                  |
 
 ---
 
-# 🔍 Low-Level Design (LLD)
+# 🧠 Advanced RAG Intelligence Layer
 
-## Backend Architecture
+The platform implements a production-grade retrieval architecture combining semantic search, graph reasoning, reranking, hallucination prevention, and automated answer evaluation.
 
-The backend is built around stateless asynchronous execution patterns.
+---
+
+## Multi-Format Visual Ingestion Layer
+
+The ingestion subsystem uses Gemini Multimodal Vision to extract structured information from:
+
+* PDF files
+* Regulatory filings
+* ESG reports
+* Climate disclosures
+* Plain-text submissions
+
+The extraction process preserves:
+
+* Layout structure
+* Tables
+* Charts
+* Semantic sections
+* Metadata relationships
 
 ```text
-[HTTP Request]
-       │
-       ▼
-[FastAPI Router]
-       │
-       ▼
-[Dependency Injection Layer]
-       │
-       ▼
-[ClimateRiskService]
-       │
-       ▼
-[asyncpg Connection Pool]
+PDF
+ │
+ ▼
+Gemini Vision
+ │
+ ▼
+Structured Markdown
+ │
+ ▼
+Knowledge Processing Pipeline
 ```
-
-### Async Database Layer
-
-Uses raw `asyncpg` connection pools instead of traditional ORMs to achieve:
-
-* Lower overhead
-* Faster execution
-* Explicit connection management
-* Improved scalability
-
-### Service Layer
-
-`ClimateRiskService` provides:
-
-* `run_dynamic_extraction()`
-* `get_analytics()`
-
-The service remains stateless and receives database dependencies through FastAPI injection.
-
-### Concurrency Safety
-
-The ingestion subsystem implements:
-
-* Safe async connection handling
-* Pool exhaustion prevention
-* Deadlock mitigation
-* Concurrent upload processing
 
 ---
 
-## Frontend Architecture
+## Parent-Child Hierarchical Chunking
 
-The frontend uses React state composition over strongly typed TypeScript models.
+Documents are transformed into hierarchical retrieval structures.
+
+### Parent Chunks
+
+Large contextual blocks preserving:
+
+* Narrative continuity
+* Compliance context
+* Cross-reference information
+
+### Child Chunks
+
+Fine-grained retrieval units optimized for semantic search.
+
+Examples:
+
+* Sentences
+* Claims
+* Metrics
+* Regulatory statements
 
 ```text
-[User Upload]
-      │
-      ▼
-[DocumentManager]
-      │
-      ▼
-[Polling Engine]
-      │
-      ▼
-[ClimateRiskWidget]
+Document
+    │
+    ▼
+Parent Node
+    │
+ ┌──┼──┐
+ ▼  ▼  ▼
+C1 C2 C3
 ```
 
-### Polling Engine
-
-Implemented through React Hooks:
-
-```tsx
-useEffect(...)
-```
-
-Responsibilities:
-
-* Track ingestion jobs
-* Poll worker status
-* Synchronize dashboard state
-
-### Accessibility (A11y)
-
-Features include:
-
-* `aria-label` support
-* Keyboard navigation
-* `role="button"`
-* Enter/Space execution handlers
-
-### Hydration Isolation
-
-Components use defensive rendering:
-
-```tsx
-if (!data) return null;
-```
-
-This prevents rendering before API payloads are available.
+This architecture improves retrieval accuracy while maintaining contextual integrity.
 
 ---
 
-# 🧠 Advanced RAG & Native Vector Search
+## Graph-RAG Topology Engine
 
-The platform integrates Retrieval-Augmented Generation (RAG) directly into PostgreSQL using the `pgvector` extension.
+The system automatically extracts entities and constructs relationship graphs.
+
+Entity Examples:
+
+* Facilities
+* Companies
+* Regulatory Bodies
+* Emissions
+* Penalties
+* Financial Obligations
 
 ```text
-[Raw Text Chunk]
-        │
-        ▼
-[Embedding Model]
-        │
-        ▼
-[Vector Embedding]
-        │
-        ▼
-[PostgreSQL pgvector]
-        ▲
-        │
-[User Query]
+Company
+   │
+   ├──── owns ─────► Facility
+   │
+   ├──── emits ────► Carbon Source
+   │
+   └──── fined ────► Regulatory Agency
 ```
+
+Graph edges are stored alongside vector embeddings within PostgreSQL.
 
 ---
 
-## Database Schema
+## HYDE Retrieval Layer
 
-```sql
-CREATE TABLE compliance_documents (
-    id SERIAL PRIMARY KEY,
-    task_id UUID NOT NULL,
-    raw_text_chunk TEXT NOT NULL,
-    embedding VECTOR(1536)
-);
-```
-
-### HNSW Index
-
-```sql
-CREATE INDEX compliance_vector_hnsw_idx
-ON compliance_documents
-USING hnsw (embedding vector_cosine_ops);
-```
-
-This enables sub-millisecond nearest-neighbor search.
-
----
-
-## Retrieval Workflow
-
-### 1. Query Expansion
-
-User prompts are transformed into multiple contextual sub-queries.
-
-### 2. Vector Similarity Search
-
-```sql
-SELECT
-    raw_text_chunk,
-    (embedding <=> :query_embedding) AS distance
-FROM compliance_documents
-WHERE (embedding <=> :query_embedding) < 0.35
-ORDER BY distance ASC
-LIMIT 5;
-```
-
-### 3. Verification Layer
-
-Retrieved context is injected into the LLM prompt together with strict behavioral constraints.
+Hypothetical Document Embeddings (HYDE) are generated before retrieval.
 
 Benefits:
 
-* Reduced hallucinations
-* Deterministic calculations
-* Auditable outputs
-
----
-
-# 🔄 Data Lifecycle
+* Better semantic recall
+* Improved retrieval coverage
+* Enhanced response quality for sparse queries
 
 ```text
-[PDF Upload]
+User Query
       │
       ▼
-[FastAPI Router]
+HYDE Generator
       │
       ▼
-[Background Worker]
+Synthetic Ideal Answer
       │
       ▼
-[Gemini Vision Parser]
-      │
-      ▼
-[Primary Database]
-      │
-      ▼
-[Read Replica]
-      │
-      ▼
-[Analytics Dashboard]
+Embedding Search
 ```
 
 ---
 
-## Processing Flow
+## Cognitive Query Decomposition
 
-### 1. Ingestion
+Incoming prompts are converted into structured retrieval plans.
 
-Documents are uploaded through:
+Example:
 
-```http
-POST /api/documents/upload
+```json
+{
+  "intent": "compliance_audit",
+  "entities": ["Facility-17"],
+  "targets": [
+    "emissions",
+    "violations",
+    "penalties"
+  ]
+}
 ```
 
-The API creates an ingestion task and marks it as `pending`.
+Benefits:
+
+* Complex reasoning support
+* Multi-hop retrieval
+* Targeted context discovery
 
 ---
 
-### 2. AI Extraction
+## Multi-Branch Reciprocal Rank Fusion (RRF)
 
-The ingestion worker sends documents to:
+Multiple retrieval engines execute concurrently.
+
+### Vector Search
+
+Semantic similarity using pgvector.
+
+### Keyword Search
+
+PostgreSQL full-text retrieval.
+
+### Graph Search
+
+Entity relationship traversal.
+
+Results are merged through Reciprocal Rank Fusion.
 
 ```text
-gemini-2.5-flash
+Vector Search
+      │
+Keyword Search
+      │
+Graph Search
+      │
+      ▼
+Reciprocal Rank Fusion
+      │
+      ▼
+Unified Retrieval Set
 ```
-
-The model extracts:
-
-* Tables
-* Charts
-* Structured text
-* Environmental metrics
-
-Outputs are converted into normalized Markdown.
 
 ---
 
-### 3. Deterministic Analytics
+## Cross-Encoder Reranking
 
-The parser identifies patterns such as:
+Retrieved contexts are evaluated using FlashRank.
 
-```regex
-Facility-\d+
-```
+Responsibilities:
 
-and
-
-```regex
-\$(\d+)\s*regulatory penalty
-```
-
-Projected liability is calculated using:
-
-[
-Projected\ Liability =
-Base\ Exposure \times
-(1 + (FacilityIndex \times 0.15))
-]
-
----
-
-### 4. Persistence
-
-Results are written to:
+* Relevance scoring
+* Context ordering
+* Noise reduction
+* Evidence prioritization
 
 ```text
-Primary DB (5433)
+Candidate Contexts
+        │
+        ▼
+FlashRank
+        │
+        ▼
+Top Evidence
 ```
 
-and replicated to:
+---
+
+## Corrective RAG (CRAG)
+
+A confidence gate validates retrieved evidence before generation.
+
+Functions:
+
+* Confidence scoring
+* Retrieval quality checks
+* Hallucination prevention
+* Retrieval correction
 
 ```text
-Read Replica (5434)
+Retrieved Context
+        │
+        ▼
+CRAG Validator
+        │
+   ┌────┴────┐
+   ▼         ▼
+Pass      Reject
+```
+
+Only validated context reaches the LLM.
+
+---
+
+## Real-Time RAGAS Evaluation
+
+Every response is evaluated automatically.
+
+Metrics:
+
+### Faithfulness
+
+Measures evidence grounding.
+
+### Answer Relevance
+
+Measures query alignment.
+
+### Context Precision
+
+Measures retrieval quality.
+
+### Context Recall
+
+Measures retrieval completeness.
+
+```text
+Generated Response
+        │
+        ▼
+RAGAS Evaluator
+        │
+        ├── Faithfulness
+        ├── Relevance
+        ├── Precision
+        └── Recall
+```
+
+Evaluation results are logged for observability and continuous improvement.
+
+---
+
+# 🔄 End-to-End Retrieval Flow
+
+```text
+User Query
+      │
+      ▼
+Query Processor
+      │
+      ▼
+HYDE Generator
+      │
+      ▼
+Query Decomposition
+      │
+      ▼
+─────────────────────────────
+│  Vector Search            │
+│  Keyword Search           │
+│  Graph Search             │
+─────────────────────────────
+      │
+      ▼
+RRF Fusion
+      │
+      ▼
+FlashRank Reranker
+      │
+      ▼
+CRAG Validation
+      │
+      ▼
+LLM Generation
+      │
+      ▼
+RAGAS Evaluation
+      │
+      ▼
+Final Response
 ```
 
 ---
 
-### 5. Dashboard Hydration
+# 🗄️ Database Architecture
 
-Analytics endpoints query the replica and return processed telemetry to the frontend in milliseconds.
+The platform uses PostgreSQL as a unified operational and retrieval datastore.
+
+### Core Technologies
+
+* PostgreSQL
+* pgvector
+* Full-text search
+* Graph relationship tables
+* HNSW vector indexing
+
+### Benefits
+
+* Single datastore architecture
+* Low operational complexity
+* Fast vector retrieval
+* Native transactional consistency
+* Scalable compliance intelligence workloads
 
 ---
 
-# 🛠️ Docker Orchestration
+# 🛠️ Docker Deployment
 
-## Launch Entire Stack
+## Launch Entire Platform
 
 ```bash
 docker compose up --build -d
@@ -403,21 +481,19 @@ docker compose up --build -d
 
 ---
 
-## View Logs
-
-Stream logs from all services:
+## Monitor Runtime Logs
 
 ```bash
 docker compose logs -f
 ```
 
-Backend only:
+Backend:
 
 ```bash
 docker compose logs -f backend
 ```
 
-Frontend only:
+Frontend:
 
 ```bash
 docker compose logs -f frontend
@@ -425,25 +501,25 @@ docker compose logs -f frontend
 
 ---
 
-# 🚀 Local Development (Without Docker)
+# 💻 Local Development
 
-## Start Databases
+## Start Database Services
 
 ```bash
-docker compose up -d db-primary db-replica
+docker compose up -d postgres
 ```
 
 ---
 
-## Start Backend
+## Run Backend
 
 ```bash
-uvicorn app.main:app --reload --port 8000
+uvicorn main:app --reload --port 8000
 ```
 
 ---
 
-## Start Frontend
+## Run Frontend
 
 ```bash
 npm install
@@ -452,21 +528,40 @@ npm run dev
 
 ---
 
-# ✨ Key Technical Highlights
+# 📊 Observability & Evaluation
+
+The platform continuously tracks:
+
+* Retrieval latency
+* Vector search performance
+* Graph search performance
+* RAGAS scores
+* Faithfulness metrics
+* Answer relevance metrics
+* Gemini quota utilization
+* Document ingestion throughput
+
+---
+
+# ✨ Technical Highlights
 
 * FastAPI asynchronous architecture
-* Gemini Vision document intelligence
-* PostgreSQL Primary/Replica topology
-* Native PostgreSQL vector search (`pgvector`)
-* HNSW indexing
-* Deterministic financial risk calculations
-* Async task execution
-* Accessibility-compliant React UI
-* Containerized deployment via Docker Compose
-* Hallucination-resistant analytics workflows
+* Gemini Multimodal Vision
+* PostgreSQL + pgvector
+* Parent-child chunking
+* Graph-RAG
+* HYDE retrieval
+* Query decomposition
+* Reciprocal Rank Fusion
+* FlashRank reranking
+* Corrective RAG (CRAG)
+* Real-time RAGAS evaluation
+* Enterprise compliance intelligence
+* Dockerized deployment
+* Hallucination-resistant generation
 
 ---
 
 # 📜 License
 
-This project is intended as a reference implementation for AI-powered climate compliance analytics, multimodal document ingestion, and deterministic financial risk assessment workflows.
+This project serves as a reference implementation for enterprise compliance intelligence, multimodal document processing, advanced Retrieval-Augmented Generation, and regulatory knowledge systems.
